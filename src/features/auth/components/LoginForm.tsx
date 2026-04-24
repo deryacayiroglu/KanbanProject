@@ -19,7 +19,7 @@ export function LoginForm() {
   }
 
   return (
-    <div className="w-full max-w-sm space-y-6 bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+    <div className="w-full max-w-sm space-y-6 bg-white p-8 rounded-2xl shadow-xl shadow-gray-200/50 border border-gray-200">
       <div className="text-center">
         <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
           Welcome back
