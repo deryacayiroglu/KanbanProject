@@ -3,7 +3,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Card } from "../types";
 import { AlignLeft } from "lucide-react";
 
-export function SortableCard({ card, onClick }: { card: Card, onClick: () => void }) {
+export function SortableCard({ card, onClick, isSettling }: { card: Card, onClick: () => void, isSettling?: boolean }) {
   const {
     attributes,
     listeners,
@@ -16,18 +16,19 @@ export function SortableCard({ card, onClick }: { card: Card, onClick: () => voi
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 100 : "auto",
   };
 
+  const isHidden = isDragging || isSettling;
+
   return (
-    <div 
+    <div
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
       onClick={onClick}
-      className={`bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-grab active:cursor-grabbing hover:border-blue-300 hover:shadow transition-all group relative ${isDragging ? 'border-blue-500 shadow-md ring-2 ring-blue-500/20' : ''}`}
+      className={`bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-grab active:cursor-grabbing hover:border-blue-300 hover:shadow group relative ${isHidden ? 'opacity-0' : ''}`}
     >
       <p className="text-sm font-medium text-gray-900 leading-snug break-words">{card.title}</p>
       {card.description && (

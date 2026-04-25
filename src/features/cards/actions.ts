@@ -71,13 +71,27 @@ export async function updateCardPositions(updates: { id: string, position: numbe
 
   if (!user) return { error: "Unauthorized" };
 
-  // Loop through updates and fire Promises concurrently
   const promises = updates.map(update => 
     supabase.from("cards").update({ position: update.position }).eq("id", update.id)
   );
   
   await Promise.all(promises);
 
-  revalidatePath(`/boards/${boardId}`);
+  return { success: true };
+}
+
+export async function moveCard(cardId: string, newColumnId: string, newPosition: number, boardId: string) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Unauthorized" };
+
+  const { error } = await supabase
+    .from("cards")
+    .update({ column_id: newColumnId, position: newPosition })
+    .eq("id", cardId);
+
+  if (error) return { error: error.message };
+
   return { success: true };
 }
