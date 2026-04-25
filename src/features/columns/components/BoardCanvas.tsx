@@ -1,12 +1,29 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, MoreHorizontal, Loader2, Trash2, Edit2, AlignLeft } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, MoreHorizontal, Loader2, Trash2, Edit2 } from "lucide-react";
 import { Column } from "../types";
 import { createColumn, deleteColumn, renameColumn } from "../actions";
 import { Card } from "@/features/cards/types";
-import { createCard } from "@/features/cards/actions";
+import { createCard, updateCardPositions } from "@/features/cards/actions";
 import { CardModal } from "@/features/cards/components/CardModal";
+import { SortableCard } from "@/features/cards/components/SortableCard";
+
+import { 
+  DndContext, 
+  closestCenter, 
+  KeyboardSensor, 
+  PointerSensor, 
+  useSensor, 
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import { 
+  arrayMove, 
+  SortableContext, 
+  sortableKeyboardCoordinates, 
+  verticalListSortingStrategy 
+} from '@dnd-kit/sortable';
 
 export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string; columns: Column[]; cards?: Card[] }) {
   // Column State
@@ -22,10 +39,27 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
   const [isSubmittingCard, setIsSubmittingCard] = useState(false);
   const [activeCard, setActiveCard] = useState<Card | null>(null);
 
+  // Local optimistic state for cards to guarantee snappy drag and drop
+  const [localCards, setLocalCards] = useState<Card[]>(cards);
+
+  useEffect(() => {
+    setLocalCards(cards);
+  }, [cards]);
+
   const cardsByColumn = columns.reduce((acc, col) => {
-    acc[col.id] = cards.filter(c => c.column_id === col.id).sort((a, b) => a.position - b.position);
+    acc[col.id] = localCards.filter(c => c.column_id === col.id).sort((a, b) => a.position - b.position);
     return acc;
   }, {} as Record<string, Card[]>);
+
+  // DnD Sensors: distance 5 prevents click-events from being eaten by the pointer sensor immediately
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // --- COLUMN LOGIC ---
   async function handleCreateCol(formData: FormData) {
@@ -71,6 +105,36 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
       alert(result.error);
     } else {
       setCreatingCardIn(null);
+    }
+  }
+
+  // --- DRAG LOGIC ---
+  function handleDragEnd(event: DragEndEvent, columnId: string) {
+    const { active, over } = event;
+    if (!over) return;
+
+    if (active.id !== over.id) {
+      setLocalCards((items) => {
+        const colCards = items.filter(c => c.column_id === columnId).sort((a, b) => a.position - b.position);
+        const oldIndex = colCards.findIndex((c) => c.id === active.id);
+        const newIndex = colCards.findIndex((c) => c.id === over.id);
+
+        const newColCards = arrayMove(colCards, oldIndex, newIndex);
+        
+        // MVP Reordering: Reset positions locally immediately as 100, 200, 300...
+        const updatedColCards = newColCards.map((c, idx) => ({ ...c, position: (idx + 1) * 100 }));
+
+        // Async update Database
+        updateCardPositions(updatedColCards.map(c => ({ id: c.id, position: c.position })), boardId);
+
+        // Merge updated local state
+        return items.map(c => {
+          if (c.column_id === columnId) {
+            return updatedColCards.find(uc => uc.id === c.id) || c;
+          }
+          return c;
+        });
+      });
     }
   }
 
@@ -144,22 +208,28 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
             
             {/* Cards Area */}
             <div className="flex-1 overflow-y-auto px-3 py-1 space-y-2.5 min-h-[40px]">
-              {cardsByColumn[column.id]?.map((card) => (
-                <div 
-                  key={card.id} 
-                  onClick={() => setActiveCard(card)}
-                  className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:border-blue-300 hover:shadow transition-all group"
+              
+              {/* Isolated DndContext per column prevents cross-column moves visually */}
+              <DndContext 
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(e) => handleDragEnd(e, column.id)}
+              >
+                <SortableContext 
+                  items={cardsByColumn[column.id]?.map(c => c.id) || []}
+                  strategy={verticalListSortingStrategy}
                 >
-                  <p className="text-sm font-medium text-gray-900 leading-snug break-words">{card.title}</p>
-                  {card.description && (
-                    <div className="mt-2 text-gray-400 flex items-center">
-                      <AlignLeft className="w-3.5 h-3.5" />
-                    </div>
-                  )}
-                </div>
-              ))}
+                  {cardsByColumn[column.id]?.map((card) => (
+                    <SortableCard 
+                      key={card.id} 
+                      card={card} 
+                      onClick={() => setActiveCard(card)} 
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
 
-              {/* Inline Card Creation */}
+              {/* Inline Card Creation Form */}
               {creatingCardIn === column.id && (
                 <form action={(f) => handleCreateCard(f, column.id)} className="bg-white rounded-lg shadow-sm border border-blue-500 overflow-hidden mt-2">
                   <textarea 

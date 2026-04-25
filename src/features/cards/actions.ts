@@ -64,3 +64,20 @@ export async function deleteCard(cardId: string, boardId: string) {
   revalidatePath(`/boards/${boardId}`);
   return { success: true };
 }
+
+export async function updateCardPositions(updates: { id: string, position: number }[], boardId: string) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Unauthorized" };
+
+  // Loop through updates and fire Promises concurrently
+  const promises = updates.map(update => 
+    supabase.from("cards").update({ position: update.position }).eq("id", update.id)
+  );
+  
+  await Promise.all(promises);
+
+  revalidatePath(`/boards/${boardId}`);
+  return { success: true };
+}
