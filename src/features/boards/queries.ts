@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { Board } from "./types";
+import { Board, Column } from "./types";
 
 export async function getBoards(): Promise<Board[]> {
   const supabase = createClient();
@@ -33,4 +33,21 @@ export async function getBoardById(id: string): Promise<Board | null> {
   }
 
   return board as Board;
+}
+
+export async function getColumnsByBoardId(boardId: string): Promise<Column[]> {
+  const supabase = createClient();
+  
+  const { data: columns, error } = await supabase
+    .from("columns")
+    .select("*")
+    .eq("board_id", boardId)
+    .order("position", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching columns:", error.message);
+    return [];
+  }
+
+  return columns as Column[];
 }

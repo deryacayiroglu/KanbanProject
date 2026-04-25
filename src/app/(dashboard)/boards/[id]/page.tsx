@@ -1,69 +1,67 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/Button";
+import { notFound } from "next/navigation";
+import { getBoardById, getColumnsByBoardId } from "@/features/boards/queries";
+import { Plus, MoreHorizontal } from "lucide-react";
 
-export default function BoardPage({ params }: { params: { id: string } }) {
+// Opt out of static caching
+export const dynamic = "force-dynamic";
+
+export default async function BoardPage({ params }: { params: { id: string } }) {
+  // Fetch board and columns data securely from server
+  const board = await getBoardById(params.id);
+
+  if (!board) {
+    notFound();
+  }
+
+  const columns = await getColumnsByBoardId(board.id);
+
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-blue-50 dark:bg-gray-800">
+    // We use calc(100vh - 64px) assuming the top navbar is ~64px tall (h-16). 
+    // This allows the board to scroll horizontally without scrolling the whole page vertically.
+    <div className="h-[calc(100vh-4rem)] bg-gray-50 flex flex-col">
       {/* Board Header */}
-      <div className="h-14 px-4 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="font-bold text-lg text-gray-900 dark:text-white">Board {params.id}</h1>
-          <Button variant="ghost" size="sm">★</Button>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">Filter</Button>
-          <Button variant="outline" size="sm">Share</Button>
-          <Button variant="ghost" size="sm">...</Button>
-        </div>
+      <div className="h-14 px-6 bg-white border-b border-gray-200 flex items-center justify-between shadow-sm shrink-0">
+        <h1 className="font-semibold text-gray-900 tracking-tight">
+          {board.title}
+        </h1>
+        {/* Future board menu placeholder */}
+        <button className="text-gray-400 hover:text-gray-600 transition-colors">
+          <MoreHorizontal className="w-5 h-5" />
+        </button>
       </div>
 
-      {/* Board Canvas Placeholder */}
-      <div className="flex-1 overflow-x-auto p-4 flex gap-4 items-start">
-        {/* Placeholder Column 1 */}
-        <div className="w-72 flex-shrink-0 bg-gray-100 dark:bg-gray-800 rounded-xl flex flex-col max-h-full">
-          <div className="p-3 font-semibold text-sm flex justify-between items-center text-gray-700 dark:text-gray-200">
-            To Do
-            <span className="text-gray-500">...</span>
-          </div>
-          <div className="p-2 overflow-y-auto flex-1 space-y-2">
-            <div className="bg-white dark:bg-gray-700 p-3 rounded shadow-sm text-sm border border-gray-200 dark:border-gray-600">
-              Task 1 (Placeholder)
+      {/* Board Canvas Area */}
+      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 flex items-start gap-4">
+        {columns.map((column) => (
+          <div key={column.id} className="shrink-0 w-72 max-h-full flex flex-col bg-gray-100/80 border border-gray-200 rounded-xl shadow-sm">
+            {/* Column Header */}
+            <div className="p-3 pb-2 flex items-center justify-between cursor-grab">
+              <h3 className="font-medium text-sm text-gray-900">{column.title}</h3>
+              <button className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors">
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
             </div>
-            <div className="bg-white dark:bg-gray-700 p-3 rounded shadow-sm text-sm border border-gray-200 dark:border-gray-600">
-              Task 2 (Placeholder)
+            
+            {/* Cards Area (Empty for now) */}
+            <div className="flex-1 overflow-y-auto px-3 py-1 space-y-2 min-h-[40px]">
+              {/* Future cards will be mapped here */}
             </div>
-          </div>
-          <div className="p-2">
-            <Button variant="ghost" className="w-full justify-start text-gray-600 dark:text-gray-400">
-              + Add a card
-            </Button>
-          </div>
-        </div>
 
-        {/* Placeholder Column 2 */}
-        <div className="w-72 flex-shrink-0 bg-gray-100 dark:bg-gray-800 rounded-xl flex flex-col max-h-full">
-          <div className="p-3 font-semibold text-sm flex justify-between items-center text-gray-700 dark:text-gray-200">
-            In Progress
-            <span className="text-gray-500">...</span>
-          </div>
-          <div className="p-2 overflow-y-auto flex-1 space-y-2">
-            <div className="bg-white dark:bg-gray-700 p-3 rounded shadow-sm text-sm border border-gray-200 dark:border-gray-600">
-              Task 3 (Placeholder)
+            {/* Add Card Footer */}
+            <div className="p-3 pt-2">
+              <button className="w-full flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-200 p-2 rounded-lg transition-colors font-medium focus:outline-none">
+                <Plus className="w-4 h-4" />
+                Add card
+              </button>
             </div>
           </div>
-          <div className="p-2">
-            <Button variant="ghost" className="w-full justify-start text-gray-600 dark:text-gray-400">
-              + Add a card
-            </Button>
-          </div>
-        </div>
-
-        {/* Add List Placeholder */}
-        <div className="w-72 flex-shrink-0">
-          <Button variant="ghost" className="w-full justify-start bg-white/20 dark:bg-gray-800/50 hover:bg-white/30 dark:hover:bg-gray-800/70 text-gray-700 dark:text-gray-200">
-            + Add another list
-          </Button>
-        </div>
+        ))}
+        
+        {/* Add New Column Placeholder */}
+        <button className="shrink-0 w-72 h-12 flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-white border border-dashed border-gray-300 hover:border-gray-400 rounded-xl px-4 transition-colors focus:outline-none shadow-sm">
+          <Plus className="w-4 h-4" />
+          Add another list
+        </button>
       </div>
     </div>
   );

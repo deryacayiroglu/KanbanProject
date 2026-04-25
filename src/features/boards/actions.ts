@@ -11,7 +11,7 @@ export async function createBoard(title: string) {
     return { error: "Unauthorized" };
   }
 
-  const { data, error } = await supabase
+  const { data: board, error: boardError } = await supabase
     .from("boards")
     .insert([
       { 
@@ -22,12 +22,25 @@ export async function createBoard(title: string) {
     .select()
     .single();
 
-  if (error) {
-    return { error: error.message };
+  if (boardError || !board) {
+    return { error: boardError?.message || "Failed to create board" };
+  }
+
+  // Automatically create default columns for the new board
+  const { error: columnsError } = await supabase
+    .from("columns")
+    .insert([
+      { board_id: board.id, title: "To Do", position: 100 },
+      { board_id: board.id, title: "Doing", position: 200 },
+      { board_id: board.id, title: "Done", position: 300 },
+    ]);
+
+  if (columnsError) {
+    console.error("Failed to create default columns:", columnsError.message);
   }
 
   revalidatePath("/boards");
-  return { data };
+  return { data: board };
 }
 
 export async function renameBoard(id: string, newTitle: string) {

@@ -4,33 +4,95 @@ import { useState } from "react";
 import Link from "next/link";
 import { Board } from "../types";
 import { createBoard, deleteBoard, renameBoard } from "../actions";
-import { Edit2, Trash2, Plus } from "lucide-react";
+import { Edit2, Trash2, Plus, Loader2 } from "lucide-react";
 
 export function BoardGrid({ boards }: { boards: Board[] }) {
   const [isCreating, setIsCreating] = useState(false);
   const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
+  
+  // Pending and Error States
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   async function handleCreate(formData: FormData) {
     const title = formData.get("title") as string;
-    if (!title.trim()) return;
-    setIsCreating(false);
-    await createBoard(title);
+    
+    if (!title || !title.trim()) {
+      setErrorMsg("Title is required");
+      return;
+    }
+    if (title.trim().length > 50) {
+      setErrorMsg("Title must be 50 characters or less");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    
+    const result = await createBoard(title.trim());
+    setIsSubmitting(false);
+    
+    if (result?.error) {
+      setErrorMsg(result.error);
+    } else {
+      setIsCreating(false);
+    }
   }
 
   async function handleRename(formData: FormData) {
     const title = formData.get("title") as string;
-    if (!title.trim() || !editingBoardId) return;
+    
+    if (!title || !title.trim()) {
+      setErrorMsg("Title is required");
+      return;
+    }
+    if (title.trim().length > 50) {
+      setErrorMsg("Title must be 50 characters or less");
+      return;
+    }
+    if (!editingBoardId) return;
+
     const id = editingBoardId;
-    setEditingBoardId(null);
-    await renameBoard(id, title);
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    
+    const result = await renameBoard(id, title.trim());
+    setIsSubmitting(false);
+    
+    if (result?.error) {
+      setErrorMsg(result.error);
+    } else {
+      setEditingBoardId(null);
+    }
   }
 
   async function handleDelete(id: string) {
     if (confirm("Are you sure you want to delete this board? All lists and tasks will be permanently removed.")) {
-      await deleteBoard(id);
+      setDeletingId(id);
+      const result = await deleteBoard(id);
+      setDeletingId(null);
+      if (result?.error) {
+        alert(result.error);
+      }
     }
   }
 
+  // Helper to open create form and reset errors
+  function openCreate() {
+    setEditingBoardId(null);
+    setErrorMsg(null);
+    setIsCreating(true);
+  }
+
+  // Helper to open rename form and reset errors
+  function openRename(id: string) {
+    setIsCreating(false);
+    setErrorMsg(null);
+    setEditingBoardId(id);
+  }
+
+  // Empty State
   if (boards.length === 0 && !isCreating) {
     return (
       <div className="flex flex-col items-center justify-center py-24 px-4 bg-white rounded-2xl border border-dashed border-gray-300 shadow-sm">
@@ -44,7 +106,7 @@ export function BoardGrid({ boards }: { boards: Board[] }) {
           Create your first board to start tracking your tasks and projects.
         </p>
         <button 
-          onClick={() => setIsCreating(true)}
+          onClick={openCreate}
           className="bg-gray-900 text-white rounded-lg px-5 py-2.5 text-sm font-medium hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900/20 shadow-sm"
         >
           Create your first board
@@ -58,32 +120,40 @@ export function BoardGrid({ boards }: { boards: Board[] }) {
       {/* Create Board Action */}
       {isCreating ? (
         <form action={handleCreate} className="h-32 rounded-xl bg-white border border-gray-300 p-5 shadow-sm flex flex-col justify-between">
-          <input 
-            type="text" 
-            name="title" 
-            autoFocus 
-            placeholder="Board title..."
-            className="w-full text-sm outline-none font-medium text-gray-900 placeholder-gray-400 bg-transparent"
-          />
+          <div>
+            <input 
+              type="text" 
+              name="title" 
+              autoFocus 
+              disabled={isSubmitting}
+              maxLength={50}
+              placeholder="Board title..."
+              className="w-full text-sm outline-none font-medium text-gray-900 placeholder-gray-400 bg-transparent disabled:opacity-50"
+            />
+            {errorMsg && !editingBoardId && <p className="text-[10px] text-red-500 mt-1">{errorMsg}</p>}
+          </div>
           <div className="flex gap-2 justify-end">
             <button 
               type="button" 
-              onClick={() => setIsCreating(false)} 
-              className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+              disabled={isSubmitting}
+              onClick={() => { setIsCreating(false); setErrorMsg(null); }} 
+              className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button 
               type="submit" 
-              className="text-xs font-medium bg-gray-900 text-white px-3 py-1.5 rounded-md hover:bg-gray-800 transition-colors"
+              disabled={isSubmitting}
+              className="text-xs font-medium bg-gray-900 text-white px-3 py-1.5 rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 flex items-center gap-1"
             >
+              {isSubmitting && <Loader2 className="w-3 h-3 animate-spin" />}
               Create
             </button>
           </div>
         </form>
       ) : (
         <button 
-          onClick={() => setIsCreating(true)}
+          onClick={openCreate}
           className="h-32 rounded-xl bg-gray-50 border border-dashed border-gray-300 flex flex-col items-center justify-center text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors group"
         >
           <Plus className="w-6 h-6 mb-2 text-gray-400 group-hover:text-gray-600 transition-colors" />
@@ -99,32 +169,40 @@ export function BoardGrid({ boards }: { boards: Board[] }) {
         >
           {editingBoardId === board.id ? (
             <form action={handleRename} className="flex flex-col h-full justify-between relative z-20">
-              <input 
-                type="text" 
-                name="title" 
-                defaultValue={board.title}
-                autoFocus 
-                className="w-full text-sm outline-none font-semibold text-gray-900 bg-transparent border-b border-blue-500 pb-1"
-              />
+              <div>
+                <input 
+                  type="text" 
+                  name="title" 
+                  defaultValue={board.title}
+                  autoFocus 
+                  disabled={isSubmitting}
+                  maxLength={50}
+                  className="w-full text-sm outline-none font-semibold text-gray-900 bg-transparent border-b border-blue-500 pb-1 disabled:opacity-50 disabled:border-gray-300"
+                />
+                {errorMsg && <p className="text-[10px] text-red-500 mt-1">{errorMsg}</p>}
+              </div>
               <div className="flex gap-2 justify-end">
                 <button 
                   type="button" 
-                  onClick={() => setEditingBoardId(null)} 
-                  className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                  disabled={isSubmitting}
+                  onClick={() => { setEditingBoardId(null); setErrorMsg(null); }} 
+                  className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
-                  className="text-xs font-medium bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700 transition-colors"
+                  disabled={isSubmitting}
+                  className="text-xs font-medium bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-1"
                 >
+                  {isSubmitting && <Loader2 className="w-3 h-3 animate-spin" />}
                   Save
                 </button>
               </div>
             </form>
           ) : (
             <>
-              {/* Entire card is a clickable link, behind the buttons */}
+              {/* Entire card is a clickable link, strictly behind the z-10 buttons */}
               <Link href={`/boards/${board.id}`} className="absolute inset-0 z-0 rounded-xl" />
               
               <div className="relative z-10 flex items-start justify-between">
@@ -133,23 +211,25 @@ export function BoardGrid({ boards }: { boards: Board[] }) {
                 </Link>
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
                   <button 
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditingBoardId(board.id); }}
-                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors focus:outline-none"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); openRename(board.id); }}
+                    disabled={deletingId === board.id}
+                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors focus:outline-none disabled:opacity-50"
                     title="Rename Board"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
                   <button 
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(board.id); }}
-                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors focus:outline-none"
+                    disabled={deletingId === board.id}
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors focus:outline-none disabled:opacity-50"
                     title="Delete Board"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    {deletingId === board.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                   </button>
                 </div>
               </div>
               
-              <p className="relative z-10 text-xs text-gray-400 mt-auto">
+              <p className="relative z-10 text-xs text-gray-400 mt-auto pointer-events-none">
                 Created {new Date(board.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               </p>
             </>
