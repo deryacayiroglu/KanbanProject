@@ -3,6 +3,7 @@ import { getBoardById, getColumnsByBoardId } from "@/features/boards/queries";
 import { getCardsForBoard } from "@/features/cards/queries";
 import { MoreHorizontal } from "lucide-react";
 import { BoardCanvas } from "@/features/columns/components/BoardCanvas";
+import { BoardHeader } from "@/features/boards/components/BoardHeader";
 
 // Opt out of static caching
 export const dynamic = "force-dynamic";
@@ -23,16 +24,8 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
 
   return (
     <div className="h-[calc(100vh-4rem)] bg-gray-50 flex flex-col">
-      {/* Board Header */}
-      <div className="h-14 px-6 bg-white border-b border-gray-200 flex items-center justify-between shadow-sm shrink-0">
-        <h1 className="font-semibold text-gray-900 tracking-tight">
-          {board.title}
-        </h1>
-        {/* Future board menu placeholder */}
-        <button className="text-gray-400 hover:text-gray-600 transition-colors focus:outline-none">
-          <MoreHorizontal className="w-5 h-5" />
-        </button>
-      </div>
+      {/* Board Header - Client Component for Inline Renaming */}
+      <BoardHeader boardId={board.id} initialTitle={board.title} />
 
       {/* Board Canvas Area - Interactive Client Component */}
       <BoardCanvas boardId={board.id} columns={columns as any} cards={cards as any} />
