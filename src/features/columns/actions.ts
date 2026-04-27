@@ -77,3 +77,34 @@ export async function deleteColumn(columnId: string, boardId: string) {
   revalidatePath(`/boards/${boardId}`);
   return { success: true };
 }
+
+export async function moveColumn(columnId: string, newPosition: number, boardId: string) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Unauthorized" };
+
+  const { error } = await supabase
+    .from("columns")
+    .update({ position: newPosition })
+    .eq("id", columnId);
+
+  if (error) return { error: error.message };
+
+  return { success: true };
+}
+
+export async function updateColumnPositions(updates: { id: string, position: number }[], boardId: string) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Unauthorized" };
+
+  const promises = updates.map(update => 
+    supabase.from("columns").update({ position: update.position }).eq("id", update.id)
+  );
+  
+  await Promise.all(promises);
+
+  return { success: true };
+}

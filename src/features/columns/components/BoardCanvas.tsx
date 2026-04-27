@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Plus, MoreHorizontal, Loader2, Trash2, Edit2, AlignLeft } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Plus, MoreHorizontal, Loader2, Trash2, Edit2, AlignLeft, GripHorizontal } from "lucide-react";
 import { Column } from "../types";
-import { createColumn, deleteColumn, renameColumn } from "../actions";
+import { createColumn, deleteColumn, renameColumn, moveColumn } from "../actions";
 import { Card } from "@/features/cards/types";
 import { createCard, moveCard } from "@/features/cards/actions";
 import { CardModal } from "@/features/cards/components/CardModal";
@@ -12,6 +12,8 @@ import { SortableCard } from "@/features/cards/components/SortableCard";
 import {
   DndContext,
   closestCenter,
+  pointerWithin,
+  CollisionDetection,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -28,8 +30,50 @@ import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
-  verticalListSortingStrategy
+  verticalListSortingStrategy,
+  horizontalListSortingStrategy,
+  useSortable,
+  defaultAnimateLayoutChanges
 } from '@dnd-kit/sortable';
+import { CSS } from "@dnd-kit/utilities";
+
+function SortableColumnWrapper({ column, children }: { column: Column, children: (dragHandleProps: any) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: column.id,
+    data: { type: 'Column' },
+    // Completely disable dnd-kit layout animations for columns
+    animateLayoutChanges: () => false
+  });
+
+  const wasDraggingRef = useRef(false);
+  if (isDragging) {
+    wasDraggingRef.current = true;
+  }
+
+  useEffect(() => {
+    if (!isDragging && wasDraggingRef.current) {
+      const timeout = setTimeout(() => {
+        wasDraggingRef.current = false;
+      }, 50);
+      return () => clearTimeout(timeout);
+    }
+  }, [isDragging]);
+
+  const isJustDropped = !isDragging && wasDraggingRef.current;
+
+  const style = {
+    // Ignore transform when dragging because the DOM node is actively moving via onDragOver arrayMove!
+    transform: (isJustDropped || isDragging) ? undefined : CSS.Transform.toString(transform),
+    transition: isJustDropped ? 'none' : transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className={`shrink-0 w-72 mr-4 max-h-full flex flex-col bg-gray-100/80 border border-gray-200 rounded-xl shadow-sm relative ${isDragging ? 'ring-2 ring-blue-500/50 z-50' : ''}`}>
+      {children({ attributes, listeners })}
+    </div>
+  );
+}
 
 // Droppable wrapper to allow dropping into empty columns
 function DroppableColumn({ id, children }: { id: string, children: React.ReactNode }) {
@@ -56,8 +100,8 @@ function CardPreview({ card }: { card: Card }) {
 }
 
 const dropAnimationConfig: DropAnimation = {
-  duration: 70,
-  easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+  duration: 35,
+  easing: "cubic-bezier(0.16, 1, 0.3, 1)",
   sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.4' } } }),
 };
 
@@ -82,11 +126,23 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
   // Local optimistic state for cards
   const [localCards, setLocalCards] = useState<Card[]>(cards);
 
+  // Local optimistic state for columns
+  const [localColumns, setLocalColumns] = useState<Column[]>([...columns].sort((a, b) => a.position - b.position));
+  const localColumnsRef = useRef<Column[]>(localColumns);
+
+  useEffect(() => {
+    localColumnsRef.current = localColumns;
+  }, [localColumns]);
+
   useEffect(() => {
     setLocalCards(cards);
   }, [cards]);
 
-  const cardsByColumn = columns.reduce((acc, col) => {
+  useEffect(() => {
+    setLocalColumns([...columns].sort((a, b) => a.position - b.position));
+  }, [columns]);
+
+  const cardsByColumn = localColumns.reduce((acc, col) => {
     acc[col.id] = localCards.filter(c => c.column_id === col.id).sort((a, b) => a.position - b.position);
     return acc;
   }, {} as Record<string, Card[]>);
@@ -155,6 +211,20 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
 
     if (activeId === overId) return;
 
+    const isActiveColumn = active.data.current?.type === 'Column';
+    if (isActiveColumn) {
+      setLocalColumns((items) => {
+        const activeIndex = items.findIndex(c => c.id === activeId);
+        const overIndex = items.findIndex(c => c.id === overId);
+        
+        if (activeIndex !== -1 && overIndex !== -1 && activeIndex !== overIndex) {
+          return arrayMove(items, activeIndex, overIndex);
+        }
+        return items;
+      });
+      return;
+    }
+
     setLocalCards((items) => {
       const activeCard = items.find(c => c.id === activeId);
       const overCard = items.find(c => c.id === overId);
@@ -207,12 +277,62 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
   function handleDragEnd(event: DragEndEvent) {
     setActiveDragId(null);
     const { active, over } = event;
-    
-    if (active) {
-      setSettlingCardId(active.id as string);
-      setTimeout(() => setSettlingCardId(null), 70); // Match dropAnimation duration
+
+    if (!active || !over) return;
+
+    const isActiveColumn = active.data.current?.type === 'Column';
+
+    if (isActiveColumn) {
+      const activeId = active.id as string;
+      const overId = over.id as string;
+      
+      const finalItems = localColumnsRef.current;
+      const newIndex = finalItems.findIndex(c => c.id === activeId);
+      
+      if (newIndex === -1) return;
+
+      let newPosition = 100;
+      if (finalItems.length === 1) {
+        newPosition = 100;
+      } else if (newIndex === 0) {
+        newPosition = finalItems[1].position / 2;
+      } else if (newIndex === finalItems.length - 1) {
+        newPosition = finalItems[finalItems.length - 2].position + 100;
+      } else {
+        newPosition = (finalItems[newIndex - 1].position + finalItems[newIndex + 1].position) / 2;
+      }
+
+      const movedCol = { ...finalItems[newIndex], position: newPosition };
+      
+      const updatedItems = [...finalItems];
+      updatedItems[newIndex] = movedCol;
+      setLocalColumns(updatedItems);
+
+      const needsRebalance = newPosition < 10 ||
+        (newIndex > 0 && Math.abs(newPosition - finalItems[newIndex - 1].position) < 1) ||
+        (newIndex < finalItems.length - 1 && Math.abs(finalItems[newIndex + 1].position - newPosition) < 1);
+
+      if (needsRebalance) {
+        const rebalancedItems = updatedItems.map((col, idx) => ({ ...col, position: (idx + 1) * 100 }));
+        setLocalColumns(rebalancedItems);
+        import('@/features/columns/actions').then(({ updateColumnPositions }) => {
+          updateColumnPositions(rebalancedItems.map(c => ({ id: c.id, position: c.position })), boardId);
+        });
+      } else {
+        moveColumn(movedCol.id, newPosition, boardId).then((result) => {
+          if (result?.error) {
+            console.error("Failed to move column:", result.error);
+            setLocalColumns([...columns].sort((a, b) => a.position - b.position));
+          }
+        });
+      }
+
+      return;
     }
-    if (!over) return;
+
+    setSettlingCardId(active.id as string);
+    // Use 40ms to tightly match the new snappy 35ms drop animation duration
+    setTimeout(() => setSettlingCardId(null), 40);
 
     const activeId = active.id as string;
     const overId = over.id as string;
@@ -258,24 +378,54 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
       }
 
       const movedCard = { ...finalItems[activeItemIndex], position: newPosition };
-
-      // Capture state for potential rollback
-      const previousState = [...items];
-
-      // Async update DB silently
-      moveCard(movedCard.id, targetColId, newPosition, boardId).then((result) => {
-        if (result?.error) {
-          console.error("Failed to move card:", result.error);
-          setLocalCards(previousState); // Rollback optimistic UI
-        }
-      });
-
       finalItems[activeItemIndex] = movedCard;
+      targetColCards[newCardIndex] = movedCard;
+
+      const needsRebalance = newPosition < 10 ||
+        (newCardIndex > 0 && Math.abs(newPosition - targetColCards[newCardIndex - 1].position) < 1) ||
+        (newCardIndex < targetColCards.length - 1 && Math.abs(targetColCards[newCardIndex + 1].position - newPosition) < 1);
+
+      if (needsRebalance) {
+        const rebalanced = targetColCards.map((c, idx) => ({ ...c, position: (idx + 1) * 100 }));
+        rebalanced.forEach(rc => {
+          const idx = finalItems.findIndex(c => c.id === rc.id);
+          if (idx !== -1) finalItems[idx] = rc;
+        });
+        import('@/features/cards/actions').then(({ updateCardPositions, moveCard }) => {
+          moveCard(movedCard.id, targetColId, rebalanced[newCardIndex].position, boardId).then(() => {
+            updateCardPositions(rebalanced.map(c => ({ id: c.id, position: c.position })), boardId);
+          });
+        });
+      } else {
+        const previousState = [...items];
+        moveCard(movedCard.id, targetColId, newPosition, boardId).then((result) => {
+          if (result?.error) {
+            console.error("Failed to move card:", result.error);
+            setLocalCards(previousState);
+          }
+        });
+      }
+
       return finalItems;
     });
   }
 
   const activeDragCard = activeDragId ? localCards.find(c => c.id === activeDragId) : null;
+
+  const customCollisionDetection: CollisionDetection = (args) => {
+    // When dragging a column, completely ignore cards for collision detection.
+    // Use pointerWithin to prevent infinite loops when mutating localColumns in onDragOver
+    if (activeDragId && localColumns.some(c => c.id === activeDragId)) {
+      const columnContainers = args.droppableContainers.filter(
+        (container) => container.data.current?.type === 'Column'
+      );
+      return pointerWithin({
+        ...args,
+        droppableContainers: columnContainers,
+      });
+    }
+    return closestCenter(args);
+  };
 
   return (
     <>
@@ -285,135 +435,152 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={customCollisionDetection}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 flex items-start gap-4">
-          {columns.map((column) => (
-            <div key={column.id} className="shrink-0 w-72 max-h-full flex flex-col bg-gray-100/80 border border-gray-200 rounded-xl shadow-sm relative">
-
-              {/* Column Header */}
-              <div className="p-3 pb-2 flex items-center justify-between group">
-                {editingColId === column.id ? (
-                  <input
-                    type="text"
-                    defaultValue={column.title}
-                    autoFocus
-                    disabled={isSubmittingCol}
-                    maxLength={50}
-                    onBlur={(e) => handleRenameCol(e.target.value, column.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                      else if (e.key === "Escape") setEditingColId(null);
-                    }}
-                    className="w-full px-1.5 py-0.5 text-sm font-medium text-gray-900 bg-white border border-blue-500 rounded outline-none disabled:opacity-50"
-                  />
-                ) : (
-                  <h3
-                    onClick={() => setEditingColId(column.id)}
-                    className="font-medium text-sm text-gray-900 px-1.5 py-0.5 cursor-text flex-1 truncate"
-                    title="Click to rename"
-                  >
-                    {column.title}
-                  </h3>
-                )}
-
-                <div className="relative ml-2">
-                  <button
-                    onClick={() => setMenuOpenId(menuOpenId === column.id ? null : column.id)}
-                    className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors focus:outline-none relative z-50"
-                  >
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
-
-                  {menuOpenId === column.id && (
-                    <>
-                      <div className="fixed inset-0 z-40 cursor-default" onClick={() => setMenuOpenId(null)} />
-                      <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 shadow-md rounded-lg z-50 py-1 overflow-hidden">
+        <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 flex items-start">
+          <SortableContext
+            items={localColumns.map(c => c.id)}
+            strategy={horizontalListSortingStrategy}
+          >
+            {localColumns.map((column) => (
+              <SortableColumnWrapper key={column.id} column={column}>
+                {({ attributes, listeners }) => (
+                  <>
+                    {/* Column Header */}
+                    <div className="p-3 pb-2 flex items-center justify-between group">
+                      <div className="flex items-center flex-1 truncate mr-2">
                         <button
-                          onClick={() => { setEditingColId(column.id); setMenuOpenId(null); }}
-                          className="w-full text-left px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors"
+                          {...attributes}
+                          {...listeners}
+                          className="mr-1.5 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing focus:outline-none"
                         >
-                          <Edit2 className="w-3 h-3" /> Rename list
+                          <GripHorizontal className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => handleDeleteCol(column.id)}
-                          disabled={deletingColId === column.id}
-                          className="w-full text-left px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors disabled:opacity-50"
-                        >
-                          {deletingColId === column.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                          Delete list
-                        </button>
+                        {editingColId === column.id ? (
+                          <input
+                            type="text"
+                            defaultValue={column.title}
+                            autoFocus
+                            disabled={isSubmittingCol}
+                            maxLength={50}
+                            onBlur={(e) => handleRenameCol(e.target.value, column.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") e.currentTarget.blur();
+                              else if (e.key === "Escape") setEditingColId(null);
+                            }}
+                            className="w-full px-1.5 py-0.5 text-sm font-medium text-gray-900 bg-white border border-blue-500 rounded outline-none disabled:opacity-50"
+                          />
+                        ) : (
+                          <h3
+                            onClick={() => setEditingColId(column.id)}
+                            className="font-medium text-sm text-gray-900 px-1.5 py-0.5 cursor-text flex-1 truncate"
+                            title="Click to rename"
+                          >
+                            {column.title}
+                          </h3>
+                        )}
                       </div>
-                    </>
-                  )}
-                </div>
-              </div>
 
-              {/* Cards Area with Droppable Column Wrapper */}
-              <DroppableColumn id={column.id}>
-                <SortableContext
-                  items={cardsByColumn[column.id]?.map(c => c.id) || []}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {cardsByColumn[column.id]?.map((card) => (
-                    <SortableCard
-                      key={card.id}
-                      card={card}
-                      isSettling={card.id === settlingCardId}
-                      onClick={() => setActiveCard(card)}
-                    />
-                  ))}
-                </SortableContext>
+                      <div className="relative ml-2">
+                        <button
+                          onClick={() => setMenuOpenId(menuOpenId === column.id ? null : column.id)}
+                          className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors focus:outline-none relative z-50"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
 
-                {/* Inline Card Creation */}
-                {creatingCardIn === column.id && (
-                  <form action={(f) => handleCreateCard(f, column.id)} className="bg-white rounded-lg shadow-sm border border-blue-500 overflow-hidden mt-2">
-                    <textarea
-                      name="title"
-                      autoFocus
-                      disabled={isSubmittingCard}
-                      maxLength={80}
-                      placeholder="Enter a title for this card..."
-                      className="w-full text-sm outline-none resize-none bg-transparent p-3 pb-0 text-gray-900 placeholder-gray-400"
-                      rows={3}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          e.currentTarget.form?.requestSubmit();
-                        } else if (e.key === "Escape") {
-                          setCreatingCardIn(null);
-                        }
-                      }}
-                    />
-                    <div className="flex gap-1.5 p-2 pt-1">
-                      <button type="submit" disabled={isSubmittingCard} className="text-xs font-medium bg-blue-600 text-white px-3 py-1.5 rounded-md flex items-center gap-1 hover:bg-blue-700 transition-colors disabled:opacity-50">
-                        {isSubmittingCard && <Loader2 className="w-3 h-3 animate-spin" />} Add
-                      </button>
-                      <button type="button" onClick={() => setCreatingCardIn(null)} disabled={isSubmittingCard} className="text-xs font-medium text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded-md transition-colors disabled:opacity-50">
-                        Cancel
-                      </button>
+                        {menuOpenId === column.id && (
+                          <>
+                            <div className="fixed inset-0 z-40 cursor-default" onClick={() => setMenuOpenId(null)} />
+                            <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 shadow-md rounded-lg z-50 py-1 overflow-hidden">
+                              <button
+                                onClick={() => { setEditingColId(column.id); setMenuOpenId(null); }}
+                                className="w-full text-left px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors"
+                              >
+                                <Edit2 className="w-3 h-3" /> Rename list
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCol(column.id)}
+                                disabled={deletingColId === column.id}
+                                className="w-full text-left px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors disabled:opacity-50"
+                              >
+                                {deletingColId === column.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                                Delete list
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </form>
-                )}
-              </DroppableColumn>
 
-              {/* Add Card Footer */}
-              <div className="p-3 pt-2 border-t border-gray-200/50">
-                {creatingCardIn !== column.id && (
-                  <button
-                    onClick={() => setCreatingCardIn(column.id)}
-                    className="w-full flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-200 p-2 rounded-lg transition-colors font-medium focus:outline-none"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add a card
-                  </button>
+                    {/* Cards Area with Droppable Column Wrapper */}
+                    <DroppableColumn id={column.id}>
+                      <SortableContext
+                        items={cardsByColumn[column.id]?.map(c => c.id) || []}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {cardsByColumn[column.id]?.map((card) => (
+                          <SortableCard
+                            key={card.id}
+                            card={card}
+                            isSettling={card.id === settlingCardId}
+                            onClick={() => setActiveCard(card)}
+                          />
+                        ))}
+                      </SortableContext>
+
+                      {/* Inline Card Creation */}
+                      {creatingCardIn === column.id && (
+                        <form action={(f) => handleCreateCard(f, column.id)} className="bg-white rounded-lg shadow-sm border border-blue-500 overflow-hidden mt-2">
+                          <textarea
+                            name="title"
+                            autoFocus
+                            disabled={isSubmittingCard}
+                            maxLength={80}
+                            placeholder="Enter a title for this card..."
+                            className="w-full text-sm outline-none resize-none bg-transparent p-3 pb-0 text-gray-900 placeholder-gray-400"
+                            rows={3}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                e.currentTarget.form?.requestSubmit();
+                              } else if (e.key === "Escape") {
+                                setCreatingCardIn(null);
+                              }
+                            }}
+                          />
+                          <div className="flex gap-1.5 p-2 pt-1">
+                            <button type="submit" disabled={isSubmittingCard} className="text-xs font-medium bg-blue-600 text-white px-3 py-1.5 rounded-md flex items-center gap-1 hover:bg-blue-700 transition-colors disabled:opacity-50">
+                              {isSubmittingCard && <Loader2 className="w-3 h-3 animate-spin" />} Add
+                            </button>
+                            <button type="button" onClick={() => setCreatingCardIn(null)} disabled={isSubmittingCard} className="text-xs font-medium text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded-md transition-colors disabled:opacity-50">
+                              Cancel
+                            </button>
+                          </div>
+                        </form>
+                      )}
+                    </DroppableColumn>
+
+                    {/* Add Card Footer */}
+                    <div className="p-3 pt-2 border-t border-gray-200/50">
+                      {creatingCardIn !== column.id && (
+                        <button
+                          onClick={() => setCreatingCardIn(column.id)}
+                          className="w-full flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-200 p-2 rounded-lg transition-colors font-medium focus:outline-none"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Add a card
+                        </button>
+                      )}
+                    </div>
+                  </>
                 )}
-              </div>
-            </div>
-          ))}
+              </SortableColumnWrapper>
+            ))}
+          </SortableContext>
 
           {/* Create New Column UI */}
           {isCreatingCol ? (
