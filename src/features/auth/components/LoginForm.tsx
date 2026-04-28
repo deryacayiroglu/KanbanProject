@@ -3,18 +3,25 @@
 import { useState } from "react";
 import { login } from "../actions";
 import Link from "next/link";
+import { Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const router = useRouter();
 
   async function handleSubmit(formData: FormData) {
+    if (isPending) return;
     setIsPending(true);
     setError(null);
     const result = await login(formData);
+    
     if (result?.error) {
-      setError(result.error);
+      setError("Invalid email or password");
       setIsPending(false);
+    } else if (result?.success) {
+      router.push("/boards");
     }
   }
 
@@ -62,9 +69,16 @@ export function LoginForm() {
         <button 
           type="submit" 
           disabled={isPending}
-          className="w-full bg-gray-900 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900/20 disabled:opacity-50"
+          className="w-full flex items-center justify-center bg-gray-900 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900/20 disabled:opacity-50"
         >
-          {isPending ? "Signing in..." : "Sign In"}
+          {isPending ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Logging in...
+            </>
+          ) : (
+            "Sign In"
+          )}
         </button>
       </form>
       

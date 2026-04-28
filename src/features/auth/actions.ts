@@ -15,11 +15,11 @@ export async function login(formData: FormData) {
   })
 
   if (error) {
-    return { error: error.message }
+    return { error: "Invalid email or password" }
   }
 
   revalidatePath("/", "layout")
-  redirect("/boards")
+  return { success: true }
 }
 
 export async function signup(formData: FormData) {
