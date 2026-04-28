@@ -5,11 +5,13 @@ import { Loader2, Trash2, X } from "lucide-react";
 import { Card } from "../types";
 import { updateCard, deleteCard } from "../actions";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { AVAILABLE_LABELS, parseLabels, stringifyLabels } from "../labels";
 
 export function CardModal({ card, boardId, onClose }: { card: Card, boardId: string, onClose: () => void }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description || "");
+  const [selectedLabels, setSelectedLabels] = useState<string[]>(parseLabels(card.label));
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -18,7 +20,8 @@ export function CardModal({ card, boardId, onClose }: { card: Card, boardId: str
     setIsSubmitting(true);
     await updateCard(card.id, boardId, { 
       title: title.trim(), 
-      description: description.trim() || null 
+      description: description.trim() || null,
+      label: stringifyLabels(selectedLabels)
     });
     setIsSubmitting(false);
     onClose();
@@ -60,14 +63,42 @@ export function CardModal({ card, boardId, onClose }: { card: Card, boardId: str
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto flex-1">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-          <textarea 
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            placeholder="Add a more detailed description..."
-            className="w-full text-sm outline-none border border-gray-200 rounded-xl p-4 bg-gray-50 focus:bg-white focus:border-blue-500 transition-colors min-h-[140px] resize-y"
-          />
+        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+            <textarea 
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="Add a more detailed description..."
+              className="w-full text-sm outline-none border border-gray-200 rounded-xl p-4 bg-gray-50 focus:bg-white focus:border-blue-500 transition-colors min-h-[140px] resize-y"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Labels</label>
+            <div className="flex flex-wrap gap-2">
+              {AVAILABLE_LABELS.map(lbl => {
+                const isSelected = selectedLabels.includes(lbl.id);
+                return (
+                  <button
+                    key={lbl.id}
+                    type="button"
+                    onClick={() => {
+                      if (isSelected) setSelectedLabels(prev => prev.filter(id => id !== lbl.id));
+                      else setSelectedLabels(prev => [...prev, lbl.id]);
+                    }}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${
+                      isSelected 
+                        ? `${lbl.color} border-transparent ring-2 ring-offset-1 ring-${lbl.color.split('-')[1]}-500/50` 
+                        : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                    }`}
+                  >
+                    {lbl.name}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Footer */}

@@ -31,7 +31,7 @@ export async function createCard(columnId: string, boardId: string, title: strin
   return { success: true };
 }
 
-export async function updateCard(cardId: string, boardId: string, payload: { title?: string; description?: string | null }) {
+export async function updateCard(cardId: string, boardId: string, payload: { title?: string; description?: string | null; label?: string | null }) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
