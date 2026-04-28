@@ -16,7 +16,8 @@ import {
   pointerWithin,
   CollisionDetection,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragEndEvent,
@@ -151,11 +152,16 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
 
   // DnD Sensors
   const sensors = useSensors(
-    useSensor(PointerSensor, { 
-      activationConstraint: { 
-        delay: 180, 
-        tolerance: 6 
-      } 
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 8,
+      },
     }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
