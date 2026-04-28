@@ -122,6 +122,56 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
   const [isSubmittingCard, setIsSubmittingCard] = useState(false);
   const [activeCard, setActiveCard] = useState<Card | null>(null);
 
+  // Focus Refs
+  const addCardTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const addColInputRef = useRef<HTMLInputElement | null>(null);
+  const editColInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!creatingCardIn) return;
+    let timeoutId: NodeJS.Timeout;
+    const frame = requestAnimationFrame(() => {
+      const el = addCardTextareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      timeoutId = setTimeout(() => {
+        el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      }, 150);
+    });
+    return () => { cancelAnimationFrame(frame); clearTimeout(timeoutId); };
+  }, [creatingCardIn]);
+
+  useEffect(() => {
+    if (!isCreatingCol) return;
+    let timeoutId: NodeJS.Timeout;
+    const frame = requestAnimationFrame(() => {
+      const el = addColInputRef.current;
+      if (!el) return;
+      el.focus();
+      el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      timeoutId = setTimeout(() => {
+        el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      }, 150);
+    });
+    return () => { cancelAnimationFrame(frame); clearTimeout(timeoutId); };
+  }, [isCreatingCol]);
+
+  useEffect(() => {
+    if (!editingColId) return;
+    let timeoutId: NodeJS.Timeout;
+    const frame = requestAnimationFrame(() => {
+      const el = editColInputRef.current;
+      if (!el) return;
+      el.focus();
+      el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      timeoutId = setTimeout(() => {
+        el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      }, 150);
+    });
+    return () => { cancelAnimationFrame(frame); clearTimeout(timeoutId); };
+  }, [editingColId]);
+
   // Drag State
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [settlingCardId, setSettlingCardId] = useState<string | null>(null);
@@ -481,9 +531,13 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
                         </button>
                         {editingColId === column.id ? (
                           <input
+                            ref={(el) => {
+                              if (editingColId === column.id) {
+                                editColInputRef.current = el;
+                              }
+                            }}
                             type="text"
                             defaultValue={column.title}
-                            autoFocus
                             disabled={isSubmittingCol}
                             maxLength={50}
                             onBlur={(e) => handleRenameCol(e.target.value, column.id)}
@@ -556,8 +610,12 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
                       {creatingCardIn === column.id && (
                         <form action={(f) => handleCreateCard(f, column.id)} className="bg-white rounded-lg shadow-sm border border-blue-500 overflow-hidden mt-2">
                           <textarea
+                            ref={(el) => {
+                              if (creatingCardIn === column.id) {
+                                addCardTextareaRef.current = el;
+                              }
+                            }}
                             name="title"
-                            autoFocus
                             disabled={isSubmittingCard}
                             maxLength={80}
                             placeholder="Enter a title for this card..."
@@ -606,9 +664,13 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
           {isCreatingCol ? (
             <form action={handleCreateCol} className="shrink-0 w-72 bg-white border border-gray-300 rounded-xl p-2 shadow-sm">
               <input
+                ref={(el) => {
+                  if (isCreatingCol) {
+                    addColInputRef.current = el;
+                  }
+                }}
                 type="text"
                 name="title"
-                autoFocus
                 disabled={isSubmittingCol}
                 maxLength={50}
                 placeholder="List title..."
