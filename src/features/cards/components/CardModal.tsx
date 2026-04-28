@@ -4,11 +4,14 @@ import { useState } from "react";
 import { Loader2, Trash2, X } from "lucide-react";
 import { Card } from "../types";
 import { updateCard, deleteCard } from "../actions";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 export function CardModal({ card, boardId, onClose }: { card: Card, boardId: string, onClose: () => void }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description || "");
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   async function handleSave() {
     if (!title.trim()) return;
@@ -21,13 +24,16 @@ export function CardModal({ card, boardId, onClose }: { card: Card, boardId: str
     onClose();
   }
 
-  async function handleDelete() {
-    if (confirm("Permanently delete this card?")) {
-      setIsSubmitting(true);
-      await deleteCard(card.id, boardId);
-      setIsSubmitting(false);
-      onClose();
-    }
+  function handleDeleteClick() {
+    setShowConfirmDelete(true);
+  }
+
+  async function handleConfirmDelete() {
+    setIsDeleting(true);
+    await deleteCard(card.id, boardId);
+    setIsDeleting(false);
+    setShowConfirmDelete(false);
+    onClose();
   }
 
   return (
@@ -67,8 +73,8 @@ export function CardModal({ card, boardId, onClose }: { card: Card, boardId: str
         {/* Footer */}
         <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
           <button 
-            onClick={handleDelete}
-            disabled={isSubmitting}
+            onClick={handleDeleteClick}
+            disabled={isSubmitting || isDeleting}
             className="text-sm font-medium text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
           >
             <Trash2 className="w-4 h-4" /> Delete
@@ -94,6 +100,16 @@ export function CardModal({ card, boardId, onClose }: { card: Card, boardId: str
         </div>
 
       </div>
+
+      <ConfirmDialog
+        open={showConfirmDelete}
+        onCancel={() => setShowConfirmDelete(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete card?"
+        description="This action cannot be undone."
+        confirmLabel="Delete card"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

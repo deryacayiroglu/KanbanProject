@@ -5,8 +5,9 @@ import { Plus, MoreHorizontal, Loader2, Trash2, Edit2, AlignLeft, GripHorizontal
 import { Column } from "../types";
 import { createColumn, deleteColumn, renameColumn, moveColumn } from "../actions";
 import { Card } from "@/features/cards/types";
-import { createCard, moveCard } from "@/features/cards/actions";
+import { createCard, updateCardPositions, moveCard } from "@/features/cards/actions";
 import { CardModal } from "@/features/cards/components/CardModal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SortableCard } from "@/features/cards/components/SortableCard";
 
 import {
@@ -113,6 +114,7 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
   const [editingColId, setEditingColId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [deletingColId, setDeletingColId] = useState<string | null>(null);
+  const [confirmDeleteColId, setConfirmDeleteColId] = useState<string | null>(null);
 
   // Card State
   const [creatingCardIn, setCreatingCardIn] = useState<string | null>(null);
@@ -174,14 +176,19 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
     else setEditingColId(null);
   }
 
-  async function handleDeleteCol(colId: string) {
-    if (confirm("Delete this list? All cards inside will be permanently lost.")) {
-      setDeletingColId(colId);
-      const result = await deleteColumn(colId, boardId);
-      setDeletingColId(null);
-      if (result?.error) alert(result.error);
-      else setMenuOpenId(null);
-    }
+  function handleDeleteCol(colId: string) {
+    setConfirmDeleteColId(colId);
+  }
+
+  async function handleConfirmDeleteCol() {
+    if (!confirmDeleteColId) return;
+    const colId = confirmDeleteColId;
+    setDeletingColId(colId);
+    const result = await deleteColumn(colId, boardId);
+    setDeletingColId(null);
+    if (result?.error) alert(result.error);
+    else setMenuOpenId(null);
+    setConfirmDeleteColId(null);
   }
 
   // --- CARD LOGIC ---
@@ -629,6 +636,16 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
           {activeDragCard ? <CardPreview card={activeDragCard} /> : null}
         </DragOverlay>
       </DndContext>
+
+      <ConfirmDialog
+        open={!!confirmDeleteColId}
+        onCancel={() => setConfirmDeleteColId(null)}
+        onConfirm={handleConfirmDeleteCol}
+        title="Delete list?"
+        description="This action cannot be undone. All cards inside this list will be permanently deleted."
+        confirmLabel="Delete list"
+        isLoading={!!deletingColId}
+      />
     </>
   );
 }

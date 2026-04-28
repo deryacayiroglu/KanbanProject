@@ -42,12 +42,11 @@ export async function signup(formData: FormData) {
     return { error: error.message }
   }
 
-  revalidatePath("/", "layout")
-  redirect("/boards")
+  return { success: true }
 }
 
 export async function logout() {
   const supabase = createClient()
   await supabase.auth.signOut()
-  redirect("/login")
+  redirect("/login?logout=success")
 }

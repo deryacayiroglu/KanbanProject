@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { MoreHorizontal, Loader2, Trash2, Edit2, AlertTriangle } from "lucide-react";
+import { MoreHorizontal, Loader2, Trash2, Edit2 } from "lucide-react";
 import { renameBoard, deleteBoard } from "../actions";
 import { useRouter } from "next/navigation";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 export function BoardHeader({ boardId, initialTitle }: { boardId: string, initialTitle: string }) {
   const router = useRouter();
@@ -156,46 +157,15 @@ export function BoardHeader({ boardId, initialTitle }: { boardId: string, initia
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
-      {isDeleteModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6">
-              <div className="flex items-center gap-4 text-red-600 mb-4">
-                <div className="p-3 bg-red-100 rounded-full">
-                  <AlertTriangle className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">Delete Board?</h3>
-              </div>
-              <p className="text-gray-600 text-sm mb-2">
-                This action cannot be undone.
-              </p>
-              <p className="text-gray-600 text-sm font-medium">
-                All columns and cards will be permanently deleted.
-              </p>
-            </div>
-            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setIsDeleteModalOpen(false)}
-                disabled={isDeleting}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-200 disabled:opacity-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 flex items-center gap-2 transition-colors"
-              >
-                {isDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isDeleting ? "Deleting..." : "Delete board"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={isDeleteModalOpen}
+        onCancel={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        title="Delete board?"
+        description="This action cannot be undone. All columns and cards will be permanently deleted."
+        confirmLabel="Delete board"
+        isLoading={isDeleting}
+      />
     </>
   );
 }
