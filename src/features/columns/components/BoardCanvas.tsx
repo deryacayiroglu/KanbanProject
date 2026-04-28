@@ -151,7 +151,12 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
 
   // DnD Sensors
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(PointerSensor, { 
+      activationConstraint: { 
+        delay: 180, 
+        tolerance: 6 
+      } 
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
