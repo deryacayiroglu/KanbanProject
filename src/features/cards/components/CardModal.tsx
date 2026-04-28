@@ -7,7 +7,7 @@ import { updateCard, deleteCard } from "../actions";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { AVAILABLE_LABELS, parseLabels, stringifyLabels } from "../labels";
 
-export function CardModal({ card, boardId, onClose }: { card: Card, boardId: string, onClose: () => void }) {
+export function CardModal({ card, boardId, onClose, onSave }: { card: Card, boardId: string, onClose: () => void, onSave?: (payload: Partial<Card>) => Promise<void> | void }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description || "");
@@ -18,11 +18,19 @@ export function CardModal({ card, boardId, onClose }: { card: Card, boardId: str
   async function handleSave() {
     if (!title.trim()) return;
     setIsSubmitting(true);
-    await updateCard(card.id, boardId, { 
+    
+    const payload = { 
       title: title.trim(), 
       description: description.trim() || null,
       label: stringifyLabels(selectedLabels)
-    });
+    };
+
+    if (onSave) {
+      await onSave(payload);
+    } else {
+      await updateCard(card.id, boardId, payload);
+    }
+    
     setIsSubmitting(false);
     onClose();
   }

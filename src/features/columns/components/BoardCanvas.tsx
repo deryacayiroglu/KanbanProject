@@ -5,7 +5,7 @@ import { Plus, MoreHorizontal, Loader2, Trash2, Edit2, AlignLeft, GripHorizontal
 import { Column } from "../types";
 import { Card } from "@/features/cards/types";
 import { createColumn, deleteColumn, renameColumn, moveColumn } from "../actions";
-import { createCard, updateCardPositions, moveCard } from "@/features/cards/actions";
+import { createCard, updateCard, updateCardPositions, moveCard } from "@/features/cards/actions";
 import { CardModal } from "@/features/cards/components/CardModal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SortableCard } from "@/features/cards/components/SortableCard";
@@ -324,6 +324,27 @@ export function BoardCanvas({ boardId, boardTitle, columns, cards = [] }: { boar
     }
   }
 
+  function handleOptimisticUpdateCard(payload: Partial<Card>) {
+    if (!activeCard) return;
+    
+    const cardId = activeCard.id;
+    const previousCard = localCards.find(c => c.id === cardId);
+    if (!previousCard) return;
+
+    // 1. Update UI instantly
+    setLocalCards(prev => prev.map(c => c.id === cardId ? { ...c, ...payload } : c));
+
+    // 2. Call server action in background
+    updateCard(cardId, boardId, payload).then(result => {
+      if (result?.error) {
+        alert(result.error);
+        // Rollback
+        setLocalCards(prev => prev.map(c => c.id === cardId ? previousCard : c));
+        setActiveCard(previousCard); // Reopen modal with old data
+      }
+    });
+  }
+
   // --- DRAG LOGIC ---
   function handleDragStart(event: DragStartEvent) {
     setActiveDragId(event.active.id as string);
@@ -559,7 +580,12 @@ export function BoardCanvas({ boardId, boardTitle, columns, cards = [] }: { boar
   return (
     <>
       {activeCard && (
-        <CardModal card={activeCard} boardId={boardId} onClose={() => setActiveCard(null)} />
+        <CardModal 
+          card={activeCard} 
+          boardId={boardId} 
+          onClose={() => setActiveCard(null)} 
+          onSave={handleOptimisticUpdateCard}
+        />
       )}
 
       <BoardHeader boardId={boardId} initialTitle={boardTitle}>
