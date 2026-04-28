@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import nextDynamic from "next/dynamic";
 import { getBoardById, getColumnsByBoardId } from "@/features/boards/queries";
 import { getCardsForBoard } from "@/features/cards/queries";
-import { BoardHeader } from "@/features/boards/components/BoardHeader";
 
 const BoardCanvas = nextDynamic(
   () => import("@/features/columns/components/BoardCanvas").then((mod) => mod.BoardCanvas),
@@ -28,11 +27,8 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
 
   return (
     <div className="h-[calc(100vh-4rem)] bg-gray-50 flex flex-col">
-      {/* Board Header - Client Component for Inline Renaming */}
-      <BoardHeader boardId={board.id} initialTitle={board.title} />
-
       {/* Board Canvas Area - Interactive Client Component */}
-      <BoardCanvas boardId={board.id} columns={columns as any} cards={cards as any} />
+      <BoardCanvas boardId={board.id} boardTitle={board.title} columns={columns as any} cards={cards as any} />
     </div>
   );
 }

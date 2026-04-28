@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Plus, MoreHorizontal, Loader2, Trash2, Edit2, AlignLeft, GripHorizontal } from "lucide-react";
+import { Plus, MoreHorizontal, Loader2, Trash2, Edit2, AlignLeft, GripHorizontal, Filter, X } from "lucide-react";
 import { Column } from "../types";
-import { createColumn, deleteColumn, renameColumn, moveColumn } from "../actions";
 import { Card } from "@/features/cards/types";
+import { createColumn, deleteColumn, renameColumn, moveColumn } from "../actions";
 import { createCard, updateCardPositions, moveCard } from "@/features/cards/actions";
 import { CardModal } from "@/features/cards/components/CardModal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SortableCard } from "@/features/cards/components/SortableCard";
+import { AVAILABLE_LABELS, parseLabels } from "@/features/cards/labels";
+import { BoardHeader } from "@/features/boards/components/BoardHeader";
 
 import {
   DndContext,
@@ -107,7 +109,7 @@ const dropAnimationConfig: DropAnimation = {
   sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.4' } } }),
 };
 
-export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string; columns: Column[]; cards?: Card[] }) {
+export function BoardCanvas({ boardId, boardTitle, columns, cards = [] }: { boardId: string; boardTitle: string; columns: Column[]; cards?: Card[] }) {
   // Column State
   const [isCreatingCol, setIsCreatingCol] = useState(false);
   const [isSubmittingCol, setIsSubmittingCol] = useState(false);
@@ -176,6 +178,10 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [settlingCardId, setSettlingCardId] = useState<string | null>(null);
 
+  // Filter State
+  const [filterLabels, setFilterLabels] = useState<string[]>([]);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+
   // Local optimistic state for cards
   const [localCards, setLocalCards] = useState<Card[]>(cards);
 
@@ -196,7 +202,16 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
   }, [columns]);
 
   const cardsByColumn = localColumns.reduce((acc, col) => {
-    acc[col.id] = localCards.filter(c => c.column_id === col.id).sort((a, b) => a.position - b.position);
+    let colCards = localCards.filter(c => c.column_id === col.id).sort((a, b) => a.position - b.position);
+    
+    if (filterLabels.length > 0) {
+      colCards = colCards.filter(c => {
+        const cLabels = parseLabels(c.label);
+        return filterLabels.some(lbl => cLabels.includes(lbl));
+      });
+    }
+    
+    acc[col.id] = colCards;
     return acc;
   }, {} as Record<string, Card[]>);
 
@@ -503,6 +518,81 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
         <CardModal card={activeCard} boardId={boardId} onClose={() => setActiveCard(null)} />
       )}
 
+      <BoardHeader boardId={boardId} initialTitle={boardTitle}>
+        <div className="flex items-center gap-2">
+          {isFilterOpen && (
+            <div className="fixed inset-0 z-40" onClick={() => setIsFilterOpen(false)} />
+          )}
+          <div className={`relative ${isFilterOpen ? 'z-50' : ''}`}>
+            <button
+              onClick={() => {
+                setMenuOpenId(null);
+                setIsFilterOpen(!isFilterOpen);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                isFilterOpen || filterLabels.length > 0
+                  ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 shadow-sm'
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              Filter {filterLabels.length > 0 && !isFilterOpen ? `(${filterLabels.length})` : ''}
+            </button>
+            
+            {/* Filter Panel Dropdown */}
+            {isFilterOpen && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-200 p-3 z-50 animate-in fade-in zoom-in-95 duration-100">
+                <div className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Filter by labels</div>
+                <div className="flex flex-wrap gap-2">
+                  {AVAILABLE_LABELS.map(lbl => {
+                    const isActive = filterLabels.includes(lbl.id);
+                    return (
+                      <button
+                        key={lbl.id}
+                        onClick={() => {
+                          if (isActive) setFilterLabels(prev => prev.filter(id => id !== lbl.id));
+                          else setFilterLabels(prev => [...prev, lbl.id]);
+                        }}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors flex-1 min-w-[45%] ${
+                          isActive ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${lbl.color.split(' ')[0]}`} />
+                        <span className="truncate">{lbl.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {filterLabels.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+                    <span className="text-xs text-gray-400">
+                      {filterLabels.length} active
+                    </span>
+                    <button
+                      onClick={() => setFilterLabels([])}
+                      className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-900 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          
+          {!isFilterOpen && filterLabels.length > 0 && (
+            <button
+              onClick={() => setFilterLabels([])}
+              className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors"
+            >
+              <X className="w-4 h-4" />
+              Clear
+            </button>
+          )}
+        </div>
+      </BoardHeader>
+
       <DndContext
         sensors={sensors}
         collisionDetection={customCollisionDetection}
@@ -560,8 +650,11 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
 
                       <div className="relative ml-2">
                         <button
-                          onClick={() => setMenuOpenId(menuOpenId === column.id ? null : column.id)}
-                          className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors focus:outline-none relative z-50"
+                          onClick={() => {
+                            setIsFilterOpen(false);
+                            setMenuOpenId(menuOpenId === column.id ? null : column.id);
+                          }}
+                          className={`p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors focus:outline-none relative ${menuOpenId === column.id ? 'z-50' : ''}`}
                         >
                           <MoreHorizontal className="w-4 h-4" />
                         </button>

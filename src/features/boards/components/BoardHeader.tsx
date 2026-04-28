@@ -6,7 +6,7 @@ import { renameBoard, deleteBoard } from "../actions";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
-export function BoardHeader({ boardId, initialTitle }: { boardId: string, initialTitle: string }) {
+export function BoardHeader({ boardId, initialTitle, children }: { boardId: string, initialTitle: string, children?: React.ReactNode }) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(initialTitle);
@@ -96,7 +96,7 @@ export function BoardHeader({ boardId, initialTitle }: { boardId: string, initia
 
   return (
     <>
-      <div className="h-14 px-6 bg-white border-b border-gray-200 flex items-center justify-between shadow-sm shrink-0">
+      <div className="min-h-[3.5rem] px-6 py-2 sm:py-0 bg-white border-b border-gray-200 flex flex-wrap items-center justify-between shadow-sm shrink-0 gap-y-3 gap-x-4">
         <div className="flex items-center gap-2">
           {isEditing ? (
             <input
@@ -120,9 +120,10 @@ export function BoardHeader({ boardId, initialTitle }: { boardId: string, initia
           )}
           {isSaving && <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />}
         </div>
-        
-        <div className="relative" ref={menuRef}>
-          <button 
+        <div className="flex items-center gap-3 ml-auto flex-wrap justify-end">
+          {children}
+          <div className="relative" ref={menuRef}>
+            <button 
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className={`p-1.5 rounded-md transition-colors focus:outline-none ${isMenuOpen ? 'bg-gray-200 text-gray-900' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
           >
@@ -154,6 +155,7 @@ export function BoardHeader({ boardId, initialTitle }: { boardId: string, initia
               </button>
             </div>
           )}
+        </div>
         </div>
       </div>
 
