@@ -121,7 +121,6 @@ export function BoardCanvas({ boardId, boardTitle, columns, cards = [] }: { boar
 
   // Card State
   const [creatingCardIn, setCreatingCardIn] = useState<string | null>(null);
-  const [isSubmittingCard, setIsSubmittingCard] = useState(false);
   const [activeCard, setActiveCard] = useState<Card | null>(null);
 
   // Focus Refs
@@ -272,12 +271,40 @@ export function BoardCanvas({ boardId, boardTitle, columns, cards = [] }: { boar
     const title = formData.get("title") as string;
     if (!title || !title.trim() || title.trim().length > 80) return;
 
-    setIsSubmittingCard(true);
-    const result = await createCard(colId, boardId, title.trim());
-    setIsSubmittingCard(false);
+    const trimmedTitle = title.trim();
 
-    if (result?.error) alert(result.error);
-    else setCreatingCardIn(null);
+    // 1. Compute position
+    const colCards = localCards.filter(c => c.column_id === colId).sort((a, b) => a.position - b.position);
+    const newPosition = colCards.length > 0 ? colCards[colCards.length - 1].position + 100 : 100;
+
+    // 2. Create temporary card
+    const tempId = `temp-${Date.now()}`;
+    const tempCard: Card = {
+      id: tempId,
+      column_id: colId,
+      title: trimmedTitle,
+      description: null,
+      label: null,
+      position: newPosition,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    // 3. Update UI immediately
+    setLocalCards(prev => [...prev, tempCard]);
+    setCreatingCardIn(null);
+
+    // 4. Send request
+    const result = await createCard(colId, boardId, trimmedTitle);
+
+    // 5. Handle response
+    if (result?.error) {
+      alert(result.error);
+      setLocalCards(prev => prev.filter(c => c.id !== tempId));
+      setCreatingCardIn(colId);
+    } else if (result?.card) {
+      setLocalCards(prev => prev.map(c => c.id === tempId ? result.card : c));
+    }
   }
 
   // --- DRAG LOGIC ---
@@ -709,11 +736,11 @@ export function BoardCanvas({ boardId, boardTitle, columns, cards = [] }: { boar
                               }
                             }}
                             name="title"
-                            disabled={isSubmittingCard}
+                            autoFocus
                             maxLength={80}
                             placeholder="Enter a title for this card..."
                             className="w-full text-sm outline-none resize-none bg-transparent p-3 pb-0 text-gray-900 placeholder-gray-400"
-                            rows={3}
+                            rows={2}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !e.shiftKey) {
                                 e.preventDefault();
@@ -723,12 +750,19 @@ export function BoardCanvas({ boardId, boardTitle, columns, cards = [] }: { boar
                               }
                             }}
                           />
-                          <div className="flex gap-1.5 p-2 pt-1">
-                            <button type="submit" disabled={isSubmittingCard} className="text-xs font-medium bg-blue-600 text-white px-3 py-1.5 rounded-md flex items-center gap-1 hover:bg-blue-700 transition-colors disabled:opacity-50">
-                              {isSubmittingCard && <Loader2 className="w-3 h-3 animate-spin" />} Add
+                          <div className="flex items-center justify-between gap-1.5 p-2 pt-1">
+                            <button
+                              type="submit"
+                              className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors"
+                            >
+                              Add Card
                             </button>
-                            <button type="button" onClick={() => setCreatingCardIn(null)} disabled={isSubmittingCard} className="text-xs font-medium text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded-md transition-colors disabled:opacity-50">
-                              Cancel
+                            <button
+                              type="button"
+                              onClick={() => setCreatingCardIn(null)}
+                              className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"
+                            >
+                              <X className="w-4 h-4" />
                             </button>
                           </div>
                         </form>

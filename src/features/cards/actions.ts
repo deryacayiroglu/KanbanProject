@@ -21,14 +21,16 @@ export async function createCard(columnId: string, boardId: string, title: strin
     ? existingCards[0].position + 100 
     : 100;
 
-  const { error } = await supabase
+  const { data: newCard, error } = await supabase
     .from("cards")
-    .insert([{ column_id: columnId, title, position: newPosition }]);
+    .insert([{ column_id: columnId, title, position: newPosition }])
+    .select()
+    .single();
 
   if (error) return { error: error.message };
 
   revalidatePath(`/boards/${boardId}`);
-  return { success: true };
+  return { success: true, card: newCard };
 }
 
 export async function updateCard(cardId: string, boardId: string, payload: { title?: string; description?: string | null; label?: string | null }) {
