@@ -10,7 +10,6 @@ export function BoardHeader({ boardId, initialTitle, children }: { boardId: stri
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(initialTitle);
-  const [isSaving, setIsSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Menu and Modal state
@@ -44,7 +43,7 @@ export function BoardHeader({ boardId, initialTitle, children }: { boardId: stri
 
   async function handleSave() {
     const trimmedTitle = title.trim();
-    if (!trimmedTitle || trimmedTitle === initialTitle) {
+    if (!trimmedTitle) {
       setTitle(initialTitle);
       setIsEditing(false);
       return;
@@ -57,18 +56,26 @@ export function BoardHeader({ boardId, initialTitle, children }: { boardId: stri
       return;
     }
 
-    setIsSaving(true);
-    const result = await renameBoard(boardId, trimmedTitle);
-    setIsSaving(false);
-
-    if (result.error) {
-      alert(result.error);
-      setTitle(initialTitle);
-    } else {
-      setTitle(trimmedTitle);
+    if (trimmedTitle === initialTitle) {
+      setIsEditing(false);
+      return;
     }
-    
-    setIsEditing(false);
+
+    const previousTitle = title; // Capture before we override it if we want, or use initialTitle
+    const rollbackTitle = title;
+
+    // Optimistic UI Update
+    setTitle(trimmedTitle);
+    setIsEditing(false); // Close input instantly
+
+    const result = await renameBoard(boardId, trimmedTitle);
+
+    if (result?.error) {
+      alert(result.error);
+      // Rollback
+      setTitle(rollbackTitle);
+      setIsEditing(true); // Reopen edit mode
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -105,8 +112,7 @@ export function BoardHeader({ boardId, initialTitle, children }: { boardId: stri
               onChange={(e) => setTitle(e.target.value)}
               onBlur={handleSave}
               onKeyDown={handleKeyDown}
-              disabled={isSaving}
-              className="font-semibold text-gray-900 tracking-tight bg-gray-50 border border-blue-500 rounded px-2 py-0.5 outline-none w-64 disabled:opacity-50"
+              className="font-semibold text-gray-900 tracking-tight bg-gray-50 border border-blue-500 rounded px-2 py-0.5 outline-none w-64"
               maxLength={50}
             />
           ) : (
@@ -118,7 +124,6 @@ export function BoardHeader({ boardId, initialTitle, children }: { boardId: stri
               {title}
             </h1>
           )}
-          {isSaving && <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />}
         </div>
         <div className="flex items-center gap-3 ml-auto flex-wrap justify-end">
           {children}

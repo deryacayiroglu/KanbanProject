@@ -9,7 +9,15 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 import { useSearch } from "@/features/boards/context/SearchContext";
 
+import { useEffect } from "react";
+
 export function BoardGrid({ boards }: { boards: Board[] }) {
+  const [localBoards, setLocalBoards] = useState<Board[]>(boards);
+
+  useEffect(() => {
+    setLocalBoards(boards);
+  }, [boards]);
+
   const [isCreating, setIsCreating] = useState(false);
   const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
   const { searchQuery, setSearchQuery } = useSearch();
@@ -47,28 +55,35 @@ export function BoardGrid({ boards }: { boards: Board[] }) {
 
   async function handleRename(formData: FormData) {
     const title = formData.get("title") as string;
+    const trimmedTitle = title?.trim();
     
-    if (!title || !title.trim()) {
-      setErrorMsg("Title is required");
+    if (!trimmedTitle || trimmedTitle.length > 50) {
+      setEditingBoardId(null);
       return;
     }
-    if (title.trim().length > 50) {
-      setErrorMsg("Title must be 50 characters or less");
-      return;
-    }
+    
     if (!editingBoardId) return;
 
     const id = editingBoardId;
-    setIsSubmitting(true);
-    setErrorMsg(null);
-    
-    const result = await renameBoard(id, title.trim());
-    setIsSubmitting(false);
+    const boardToUpdate = localBoards.find(b => b.id === id);
+    if (!boardToUpdate || boardToUpdate.title === trimmedTitle) {
+      setEditingBoardId(null);
+      return;
+    }
+
+    const previousTitle = boardToUpdate.title;
+
+    // Optimistic UI update
+    setLocalBoards(prev => prev.map(b => b.id === id ? { ...b, title: trimmedTitle } : b));
+    setEditingBoardId(null); // Close input instantly
+
+    const result = await renameBoard(id, trimmedTitle);
     
     if (result?.error) {
-      setErrorMsg(result.error);
-    } else {
-      setEditingBoardId(null);
+      alert(result.error);
+      // Rollback
+      setLocalBoards(prev => prev.map(b => b.id === id ? { ...b, title: previousTitle } : b));
+      setEditingBoardId(id);
     }
   }
 
@@ -101,7 +116,7 @@ export function BoardGrid({ boards }: { boards: Board[] }) {
   }
 
   // Empty State
-  if (boards.length === 0 && !isCreating) {
+  if (localBoards.length === 0 && !isCreating) {
     return (
       <div className="flex flex-col items-center justify-center py-24 px-4 bg-white rounded-2xl border border-dashed border-gray-300 shadow-sm">
         <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
@@ -123,7 +138,7 @@ export function BoardGrid({ boards }: { boards: Board[] }) {
     );
   }
 
-  const filteredBoards = boards.filter((board) => 
+  const filteredBoards = localBoards.filter((board) => 
     board.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -188,27 +203,22 @@ export function BoardGrid({ boards }: { boards: Board[] }) {
                     name="title" 
                     defaultValue={board.title}
                     autoFocus 
-                    disabled={isSubmitting}
                     maxLength={50}
-                    className="w-full text-sm outline-none font-semibold text-gray-900 bg-transparent border-b border-blue-500 pb-1 disabled:opacity-50 disabled:border-gray-300"
+                    className="w-full text-sm outline-none font-semibold text-gray-900 bg-transparent border-b border-blue-500 pb-1"
                   />
-                  {errorMsg && <p className="text-[10px] text-red-500 mt-1">{errorMsg}</p>}
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button 
                     type="button" 
-                    disabled={isSubmitting}
                     onClick={() => { setEditingBoardId(null); setErrorMsg(null); }} 
-                    className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
+                    className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit" 
-                    disabled={isSubmitting}
-                    className="text-xs font-medium bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-1"
+                    className="text-xs font-medium bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700 transition-colors"
                   >
-                    {isSubmitting && <Loader2 className="w-3 h-3 animate-spin" />}
                     Save
                   </button>
                 </div>

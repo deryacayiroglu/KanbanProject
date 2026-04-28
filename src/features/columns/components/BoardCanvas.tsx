@@ -243,12 +243,29 @@ export function BoardCanvas({ boardId, boardTitle, columns, cards = [] }: { boar
   }
 
   async function handleRenameCol(title: string, colId: string) {
-    if (!title || !title.trim() || title.trim().length > 50) { setEditingColId(null); return; }
-    setIsSubmittingCol(true);
-    const result = await renameColumn(colId, title.trim(), boardId);
-    setIsSubmittingCol(false);
-    if (result?.error) alert(result.error);
-    else setEditingColId(null);
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle || trimmedTitle.length > 50) { setEditingColId(null); return; }
+
+    const columnToUpdate = localColumns.find(c => c.id === colId);
+    if (!columnToUpdate || columnToUpdate.title === trimmedTitle) {
+      setEditingColId(null);
+      return;
+    }
+
+    const previousTitle = columnToUpdate.title;
+
+    // Optimistic UI Update
+    setLocalColumns(prev => prev.map(col => col.id === colId ? { ...col, title: trimmedTitle } : col));
+    setEditingColId(null); // Close input instantly
+
+    const result = await renameColumn(colId, trimmedTitle, boardId);
+    
+    if (result?.error) {
+      alert(result.error);
+      // Rollback
+      setLocalColumns(prev => prev.map(col => col.id === colId ? { ...col, title: previousTitle } : col));
+      setEditingColId(colId); // Reopen edit mode
+    }
   }
 
   function handleDeleteCol(colId: string) {
@@ -655,14 +672,13 @@ export function BoardCanvas({ boardId, boardTitle, columns, cards = [] }: { boar
                             }}
                             type="text"
                             defaultValue={column.title}
-                            disabled={isSubmittingCol}
                             maxLength={50}
                             onBlur={(e) => handleRenameCol(e.target.value, column.id)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") e.currentTarget.blur();
                               else if (e.key === "Escape") setEditingColId(null);
                             }}
-                            className="w-full px-1.5 py-0.5 text-sm font-medium text-gray-900 bg-white border border-blue-500 rounded outline-none disabled:opacity-50"
+                            className="w-full px-1.5 py-0.5 text-sm font-medium text-gray-900 bg-white border border-blue-500 rounded outline-none"
                           />
                         ) : (
                           <h3
