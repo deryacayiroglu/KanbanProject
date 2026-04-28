@@ -10,7 +10,12 @@ export async function GET(request: Request) {
     const supabase = createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(new URL(next, requestUrl.origin));
+      // Email is confirmed, but we want to force manual login
+      await supabase.auth.signOut();
+      
+      // Override 'next' to always redirect to login after confirmation
+      const redirectTo = next.startsWith("/login") ? next : "/login?confirmed=true";
+      return NextResponse.redirect(new URL(redirectTo, requestUrl.origin));
     }
   }
 
