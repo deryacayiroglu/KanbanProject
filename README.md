@@ -14,7 +14,7 @@ Designed for individuals and small teams, TaskFlow focuses on providing a fricti
 
 ## ✨ Features
 
-- **Authentication:** Secure user login and registration powered by Supabase Auth.
+- **Authentication:** Secure login and registration powered by Supabase Auth with email confirmation flow.
 - **Board & Column Management:** Full CRUD operations for boards, columns, and cards.
 - **Advanced Drag-and-Drop:** Move cards within and across columns, and reorder entire columns seamlessly.
 - **Fractional Ordering:** Highly efficient mathematical ordering system to prevent database bottlenecks during drag-and-drop.
@@ -22,6 +22,7 @@ Designed for individuals and small teams, TaskFlow focuses on providing a fricti
 - **Interactive Filtering:** Toggle-based label filtering directly from the board header.
 - **Optimistic UI:** Instant visual feedback without waiting for server responses.
 - **Responsive & Mobile-Friendly:** Clean interaction layers tailored for touch devices.
+- **Smart Search:** Board search integrated into the header for quick navigation.
 
 ---
 
@@ -67,7 +68,7 @@ TaskFlow utilizes a modern feature-based directory structure to maintain scalabi
   - `queries.ts` (Server-side data fetching)
   - `types.ts` (TypeScript interfaces)
 - **Separation of Concerns:** UI state is purely client-side optimistic, while persistence logic is safely delegated to Server Actions running securely on the backend.
-
+- **Secure Auth Flow:** Email verification is handled via Supabase, with controlled redirects to maintain a consistent login-first access pattern.
 ---
 
 ## 🎨 UX Decisions
@@ -77,6 +78,8 @@ TaskFlow utilizes a modern feature-based directory structure to maintain scalabi
 - **Collapsible Filtering:** The label filter menu is an elegant, non-intrusive dropdown positioned in the header, opening dynamically only when required.
 - **Optimistic Updates:** Dragging items instantly updates the local client state. Database syncing happens implicitly in the background to ensure zero perceived latency.
 - **Safety Prompts:** Destructive actions (like deleting lists or cards) are protected by generic Confirm Dialog modals to prevent accidental data loss.
+- **Authentication Flow:** Email confirmation redirects users to the login page instead of granting direct access, ensuring a secure and predictable authentication experience.
+- **Clean Feedback:** Login interactions use lightweight loading states instead of intrusive toast notifications, keeping the experience minimal and focused.
 
 ---
 
