@@ -6,7 +6,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "TaskFlow - Kanban Board",
-  description: "A clean and minimal Trello-like Kanban board application",
+  description: "A clean and minimal Kanban board application to manage your tasks efficiently.",
 };
 
 export default function RootLayout({
