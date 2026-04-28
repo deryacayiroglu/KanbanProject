@@ -14,7 +14,6 @@ export default async function BoardsPage() {
           My Boards
         </h1>
       </div>
-      
       <BoardGrid boards={boards} />
     </div>
   );

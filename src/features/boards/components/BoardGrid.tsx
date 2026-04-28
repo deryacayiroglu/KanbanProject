@@ -4,12 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import { Board } from "../types";
 import { createBoard, deleteBoard, renameBoard } from "../actions";
-import { Edit2, Trash2, Plus, Loader2 } from "lucide-react";
+import { Edit2, Trash2, Plus, Loader2, Search, X } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+
+import { useSearch } from "@/features/boards/context/SearchContext";
 
 export function BoardGrid({ boards }: { boards: Board[] }) {
   const [isCreating, setIsCreating] = useState(false);
   const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
+  const { searchQuery, setSearchQuery } = useSearch();
   
   // Pending and Error States
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -120,6 +123,10 @@ export function BoardGrid({ boards }: { boards: Board[] }) {
     );
   }
 
+  const filteredBoards = boards.filter((board) => 
+    board.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -168,7 +175,7 @@ export function BoardGrid({ boards }: { boards: Board[] }) {
         )}
 
         {/* Render Boards */}
-        {boards.map((board) => (
+        {filteredBoards.map((board) => (
           <div 
             key={board.id} 
             className="relative group h-32 rounded-xl bg-white border border-gray-200 p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
@@ -243,6 +250,24 @@ export function BoardGrid({ boards }: { boards: Board[] }) {
           </div>
         ))}
       </div>
+
+      {filteredBoards.length === 0 && boards.length > 0 && !isCreating && (
+        <div className="flex flex-col items-center justify-center py-24 px-4 bg-white rounded-2xl border border-dashed border-gray-300 shadow-sm mt-4">
+          <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+            <Search className="w-8 h-8 text-gray-400" />
+          </div>
+          <h2 className="text-lg font-medium text-gray-900 mb-1">No boards found</h2>
+          <p className="text-sm text-gray-500 mb-6 text-center max-w-sm">
+            Try a different keyword to find what you're looking for.
+          </p>
+          <button 
+            onClick={() => setSearchQuery("")}
+            className="text-blue-600 hover:text-blue-700 font-medium text-sm transition-colors"
+          >
+            Clear search
+          </button>
+        </div>
+      )}
 
       <ConfirmDialog
         open={!!confirmDeleteId}
