@@ -1,9 +1,13 @@
 import { notFound } from "next/navigation";
+import nextDynamic from "next/dynamic";
 import { getBoardById, getColumnsByBoardId } from "@/features/boards/queries";
 import { getCardsForBoard } from "@/features/cards/queries";
-import { MoreHorizontal } from "lucide-react";
-import { BoardCanvas } from "@/features/columns/components/BoardCanvas";
 import { BoardHeader } from "@/features/boards/components/BoardHeader";
+
+const BoardCanvas = nextDynamic(
+  () => import("@/features/columns/components/BoardCanvas").then((mod) => mod.BoardCanvas),
+  { ssr: false }
+);
 
 // Opt out of static caching
 export const dynamic = "force-dynamic";

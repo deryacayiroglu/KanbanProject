@@ -355,77 +355,79 @@ export function BoardCanvas({ boardId, columns, cards = [] }: { boardId: string;
     const activeId = active.id as string;
     const overId = over.id as string;
 
-    setLocalCards(items => {
-      const activeCard = items.find(c => c.id === activeId);
-      if (!activeCard) return items;
+    const items = [...localCards];
+    const activeCard = items.find(c => c.id === activeId);
+    if (!activeCard) return;
 
-      const overCard = items.find(c => c.id === overId);
-      const targetColId = overCard ? overCard.column_id : columns.find(c => c.id === overId)?.id || activeCard.column_id;
+    const overCard = items.find(c => c.id === overId);
+    const targetColId = overCard ? overCard.column_id : columns.find(c => c.id === overId)?.id || activeCard.column_id;
 
-      let finalItems = [...items];
+    let finalItems = [...items];
 
-      // Ensure activeCard is in the right column
-      const activeItemIndex = finalItems.findIndex(c => c.id === activeId);
-      if (finalItems[activeItemIndex].column_id !== targetColId) {
-        finalItems[activeItemIndex] = { ...finalItems[activeItemIndex], column_id: targetColId };
-      }
+    // Ensure activeCard is in the right column
+    const activeItemIndex = finalItems.findIndex(c => c.id === activeId);
+    if (finalItems[activeItemIndex].column_id !== targetColId) {
+      finalItems[activeItemIndex] = { ...finalItems[activeItemIndex], column_id: targetColId };
+    }
 
-      let targetColCards = finalItems.filter(c => c.column_id === targetColId).sort((a, b) => a.position - b.position);
+    let targetColCards = finalItems.filter(c => c.column_id === targetColId).sort((a, b) => a.position - b.position);
 
-      if (overCard && activeId !== overId) {
-        const oldIndex = targetColCards.findIndex(c => c.id === activeId);
-        const newIndex = targetColCards.findIndex(c => c.id === overId);
-        targetColCards = arrayMove(targetColCards, oldIndex, newIndex);
-      } else if (!overCard) {
-        // Dropped on empty column
-        const oldIndex = targetColCards.findIndex(c => c.id === activeId);
-        targetColCards = arrayMove(targetColCards, oldIndex, targetColCards.length - 1);
-      }
+    if (overCard && activeId !== overId) {
+      const oldIndex = targetColCards.findIndex(c => c.id === activeId);
+      const newIndex = targetColCards.findIndex(c => c.id === overId);
+      targetColCards = arrayMove(targetColCards, oldIndex, newIndex);
+    } else if (!overCard) {
+      // Dropped on empty column
+      const oldIndex = targetColCards.findIndex(c => c.id === activeId);
+      targetColCards = arrayMove(targetColCards, oldIndex, targetColCards.length - 1);
+    }
 
-      const newCardIndex = targetColCards.findIndex(c => c.id === activeId);
+    const newCardIndex = targetColCards.findIndex(c => c.id === activeId);
 
-      let newPosition = 100;
-      if (targetColCards.length === 1) {
-        newPosition = 100;
-      } else if (newCardIndex === 0) {
-        newPosition = targetColCards[1].position / 2;
-      } else if (newCardIndex === targetColCards.length - 1) {
-        newPosition = targetColCards[targetColCards.length - 2].position + 100;
-      } else {
-        newPosition = (targetColCards[newCardIndex - 1].position + targetColCards[newCardIndex + 1].position) / 2;
-      }
+    let newPosition = 100;
+    if (targetColCards.length === 1) {
+      newPosition = 100;
+    } else if (newCardIndex === 0) {
+      newPosition = targetColCards[1].position / 2;
+    } else if (newCardIndex === targetColCards.length - 1) {
+      newPosition = targetColCards[targetColCards.length - 2].position + 100;
+    } else {
+      newPosition = (targetColCards[newCardIndex - 1].position + targetColCards[newCardIndex + 1].position) / 2;
+    }
 
-      const movedCard = { ...finalItems[activeItemIndex], position: newPosition };
-      finalItems[activeItemIndex] = movedCard;
-      targetColCards[newCardIndex] = movedCard;
+    const movedCard = { ...finalItems[activeItemIndex], position: newPosition };
+    finalItems[activeItemIndex] = movedCard;
+    targetColCards[newCardIndex] = movedCard;
 
-      const needsRebalance = newPosition < 10 ||
-        (newCardIndex > 0 && Math.abs(newPosition - targetColCards[newCardIndex - 1].position) < 1) ||
-        (newCardIndex < targetColCards.length - 1 && Math.abs(targetColCards[newCardIndex + 1].position - newPosition) < 1);
+    const needsRebalance = newPosition < 10 ||
+      (newCardIndex > 0 && Math.abs(newPosition - targetColCards[newCardIndex - 1].position) < 1) ||
+      (newCardIndex < targetColCards.length - 1 && Math.abs(targetColCards[newCardIndex + 1].position - newPosition) < 1);
 
-      if (needsRebalance) {
-        const rebalanced = targetColCards.map((c, idx) => ({ ...c, position: (idx + 1) * 100 }));
-        rebalanced.forEach(rc => {
-          const idx = finalItems.findIndex(c => c.id === rc.id);
-          if (idx !== -1) finalItems[idx] = rc;
+    if (needsRebalance) {
+      const rebalanced = targetColCards.map((c, idx) => ({ ...c, position: (idx + 1) * 100 }));
+      rebalanced.forEach(rc => {
+        const idx = finalItems.findIndex(c => c.id === rc.id);
+        if (idx !== -1) finalItems[idx] = rc;
+      });
+      
+      setLocalCards(finalItems);
+      
+      import('@/features/cards/actions').then(({ updateCardPositions, moveCard }) => {
+        moveCard(movedCard.id, targetColId, rebalanced[newCardIndex].position, boardId).then(() => {
+          updateCardPositions(rebalanced.map(c => ({ id: c.id, position: c.position })), boardId);
         });
-        import('@/features/cards/actions').then(({ updateCardPositions, moveCard }) => {
-          moveCard(movedCard.id, targetColId, rebalanced[newCardIndex].position, boardId).then(() => {
-            updateCardPositions(rebalanced.map(c => ({ id: c.id, position: c.position })), boardId);
-          });
-        });
-      } else {
-        const previousState = [...items];
-        moveCard(movedCard.id, targetColId, newPosition, boardId).then((result) => {
-          if (result?.error) {
-            console.error("Failed to move card:", result.error);
-            setLocalCards(previousState);
-          }
-        });
-      }
-
-      return finalItems;
-    });
+      });
+    } else {
+      const previousState = [...items];
+      setLocalCards(finalItems);
+      
+      moveCard(movedCard.id, targetColId, newPosition, boardId).then((result) => {
+        if (result?.error) {
+          console.error("Failed to move card:", result.error);
+          setLocalCards(previousState);
+        }
+      });
+    }
   }
 
   const activeDragCard = activeDragId ? localCards.find(c => c.id === activeDragId) : null;
